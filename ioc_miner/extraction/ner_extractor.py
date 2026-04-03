@@ -137,6 +137,9 @@ class NERExtractor:
     def extract(self, sentence: str, source: str = "") -> list[IOC]:
         return self.extract_batch([sentence], source)
 
+    def extract_all(self, sentences: list[str], source: str = "") -> list[IOC]:
+        return self.extract_batch(sentences, source)
+
     def extract_batch(self, sentences: list[str], source: str = "") -> list[IOC]:
         self._load()
         results: list[IOC] = []
