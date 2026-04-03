@@ -72,13 +72,13 @@ class IocextractBaseline:
             _add(IOCType.URL, v)
         for v in iocextract.extract_ips(text, refang=True):
             _add(IOCType.IP, v)
-        for v in iocextract.extract_md5s(text):
+        for v in iocextract.extract_md5_hashes(text):
             _add(IOCType.MD5, v)
-        for v in iocextract.extract_sha1s(text):
+        for v in iocextract.extract_sha1_hashes(text):
             _add(IOCType.SHA1, v)
-        for v in iocextract.extract_sha256s(text):
+        for v in iocextract.extract_sha256_hashes(text):
             _add(IOCType.SHA256, v)
-        for v in iocextract.extract_sha512s(text):
+        for v in iocextract.extract_sha512_hashes(text):
             _add(IOCType.SHA512, v)
         for v in iocextract.extract_emails(text, refang=True):
             _add(IOCType.EMAIL, v)
