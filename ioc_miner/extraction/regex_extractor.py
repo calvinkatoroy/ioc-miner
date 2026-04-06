@@ -37,6 +37,7 @@ _SHA256 = re.compile(r"\b[0-9a-fA-F]{64}\b")
 _SHA512 = re.compile(r"\b[0-9a-fA-F]{128}\b")
 
 _CVE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
+_MS_BULLETIN = re.compile(r"\bMS\d{2}-\d{3,4}\b", re.IGNORECASE)
 
 _EMAIL = re.compile(
     r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b"
@@ -47,6 +48,13 @@ _FILEPATH = re.compile(
     r"(?:[A-Za-z]:\\(?:[^\\\s/:*?\"<>|\r\n]+\\)*[^\\\s/:*?\"<>|\r\n]*)"  # Windows
     r"|(?:/(?:[^\s/]+/)*[^\s/]+)",  # Unix
 )
+
+# Extensions that look like TLDs but are executable/script files — not domains
+_EXECUTABLE_EXTS = {
+    "exe", "dll", "bat", "ps1", "sys", "lnk", "vbs", "cmd",
+    "msi", "jar", "ini", "log", "dat", "tmp", "inf", "reg",
+    "scr", "pif", "wsf", "hta",
+}
 
 # ─── Allowlist / denylist ──────────────────────────────────────────────────────
 
@@ -158,6 +166,10 @@ class RegexExtractor:
             domain = m.group().lower()
             if self.skip_benign_domains and domain in _BENIGN_DOMAINS:
                 continue
+            # Skip if the TLD is an executable/script extension (e.g. cmd.exe, certutil.exe)
+            tld = domain.rsplit(".", 1)[-1]
+            if tld in _EXECUTABLE_EXTS:
+                continue
             # Skip if this domain is already covered by a URL match
             if any(domain in url for url in seen_urls):
                 continue
@@ -183,10 +195,19 @@ class RegexExtractor:
         return results
 
     def _extract_cves(self, sentence: str, source: str) -> list[IOC]:
-        return [
-            self._make_ioc(IOCType.CVE, m.group().upper(), sentence, source)
-            for m in _CVE.finditer(sentence)
-        ]
+        results = []
+        seen: set[str] = set()
+        for m in _CVE.finditer(sentence):
+            val = m.group().upper()
+            if val not in seen:
+                seen.add(val)
+                results.append(self._make_ioc(IOCType.CVE, val, sentence, source))
+        for m in _MS_BULLETIN.finditer(sentence):
+            val = m.group().upper()
+            if val not in seen:
+                seen.add(val)
+                results.append(self._make_ioc(IOCType.CVE, val, sentence, source))
+        return results
 
     def _extract_emails(self, sentence: str, source: str) -> list[IOC]:
         return [
@@ -198,8 +219,13 @@ class RegexExtractor:
         results = []
         for m in _FILEPATH.finditer(sentence):
             path = m.group()
-            # Skip very short Unix paths that are likely false positives
-            if path.startswith("/") and len(path) < 4:
-                continue
+            if path.startswith("/"):
+                # Require at least two path components (/dir/file, not /file)
+                parts = [p for p in path.split("/") if p]
+                if len(parts) < 2:
+                    continue
+                # Skip template placeholders like /<ip>/<name>
+                if "<" in path or ">" in path:
+                    continue
             results.append(self._make_ioc(IOCType.FILEPATH, path, sentence, source))
         return results

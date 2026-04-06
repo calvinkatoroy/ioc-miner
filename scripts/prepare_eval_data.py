@@ -58,6 +58,8 @@ _RE_SHA1 = re.compile(r"^[0-9a-fA-F]{40}$")
 _RE_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 _RE_SHA512 = re.compile(r"^[0-9a-fA-F]{128}$")
 _RE_CVE = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.IGNORECASE)
+_RE_CVE_EXTRACT = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
+_RE_MS_BULLETIN = re.compile(r"\bMS\d{2}-\d{3,4}\b", re.IGNORECASE)
 
 
 def _refine_type(value: str) -> str | None:
@@ -84,6 +86,23 @@ def _refine_type(value: str) -> str | None:
     return None
 
 
+def _extract_vuln_id(value: str) -> str | None:
+    """Extract a canonical CVE ID or MS security bulletin from a Vulnerability span.
+
+    CyNER Vulnerability spans are noisy — they include generic descriptions like
+    'stack buffer overflow', malware names like 'conficker', and partially-tokenised
+    IDs like 'cve-2014-1761 exploit'.  This function pulls out the first real
+    identifier and discards the rest.
+    """
+    m = _RE_CVE_EXTRACT.search(value)
+    if m:
+        return m.group().upper()
+    m = _RE_MS_BULLETIN.search(value)
+    if m:
+        return m.group().upper()
+    return None
+
+
 # ─── CyNER source ─────────────────────────────────────────────────────────────
 
 _CYNER_DATASETS = [
@@ -92,8 +111,8 @@ _CYNER_DATASETS = [
 ]
 
 _CYNER_TYPE_MAP = {
-    "Indicator": None,       # refined by value pattern
-    "Vulnerability": "cve",
+    "Indicator": None,          # refined by value pattern
+    "Vulnerability": "__vuln__", # extract canonical CVE/MS-bulletin ID; skip junk
     "Malware": "__skip__",
 }
 
@@ -144,15 +163,24 @@ def _load_cyner(split: str = "train") -> list[dict]:
             if mapped is None:
                 # Indicator → refine by value pattern
                 ioc_type = _refine_type(entity_text)
+                ioc_value = entity_text.lower()
+            elif mapped == "__vuln__":
+                # Vulnerability → extract canonical CVE/MS-bulletin; skip noise
+                canonical = _extract_vuln_id(entity_text)
+                if canonical is None:
+                    continue
+                ioc_type = "cve"
+                ioc_value = canonical.lower()
             else:
                 ioc_type = mapped
+                ioc_value = entity_text.lower()
 
             if ioc_type is None:
                 continue
 
             grouped[key]["iocs"].append({
                 "type": ioc_type,
-                "value": entity_text.lower(),
+                "value": ioc_value,
                 "verdict": "unknown",
             })
 
