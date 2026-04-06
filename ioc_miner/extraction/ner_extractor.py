@@ -164,6 +164,12 @@ class NERExtractor:
                         continue
 
                     value = pred["word"].strip().lower()
+
+                    # Tokenizer sometimes inserts spaces around hyphens in
+                    # structured identifiers (e.g. "cve - 2024 - 1234").
+                    # Normalise by collapsing " - " → "-" before type matching.
+                    value = value.replace(" - ", "-").replace("- ", "-").replace(" -", "-")
+
                     ioc_type = _LABEL_MAP[label]
 
                     # Generic IOC label → refine to specific type by value pattern
