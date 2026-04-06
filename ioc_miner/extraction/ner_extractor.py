@@ -155,12 +155,15 @@ class NERExtractor:
             for sentence, preds in zip(batch, predictions):
                 for pred in preds:
                     label_raw = pred["entity_group"].upper()
-                    # Strip B-/I- prefix if aggregation_strategy didn't
-                    label = label_raw.lstrip("BI-")
+                    # Strip B-/I- prefix if aggregation_strategy didn't remove it
+                    if label_raw.startswith(("B-", "I-")):
+                        label = label_raw[2:]
+                    else:
+                        label = label_raw
                     if label not in _LABEL_MAP:
                         continue
 
-                    value = pred["word"].strip()
+                    value = pred["word"].strip().lower()
                     ioc_type = _LABEL_MAP[label]
 
                     # Generic IOC label → refine to specific type by value pattern
