@@ -14,3 +14,4 @@ venv/
 models/            # downloaded HuggingFace model weights
 data/              # raw datasets and eval JSONL (large, not committed)
 results/           # benchmark output JSON/CSV
+training/output/   # benchmark results saved from Colab
