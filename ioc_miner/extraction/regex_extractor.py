@@ -227,5 +227,14 @@ class RegexExtractor:
                 # Skip template placeholders like /<ip>/<name>
                 if "<" in path or ">" in path:
                     continue
+                # Skip date/version-like paths where every component is numeric
+                # e.g. /4/6/26 or /2024/01/15 extracted from PDF timestamps
+                if all(re.match(r"^\d+[,.]?\d*$", p) for p in parts):
+                    continue
+                # Skip paths that are the path portion of a URL already in the sentence
+                # e.g. "/evil.com/path" extracted from "https://evil.com/path"
+                pre = sentence[max(0, m.start() - 40) : m.start()]
+                if re.search(r"https?://[^\s/]*$", pre):
+                    continue
             results.append(self._make_ioc(IOCType.FILEPATH, path, sentence, source))
         return results

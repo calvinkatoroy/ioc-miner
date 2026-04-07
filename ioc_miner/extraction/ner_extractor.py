@@ -165,10 +165,14 @@ class NERExtractor:
 
                     value = pred["word"].strip().lower()
 
-                    # Tokenizer sometimes inserts spaces around hyphens in
-                    # structured identifiers (e.g. "cve - 2024 - 1234").
-                    # Normalise by collapsing " - " → "-" before type matching.
+                    # Tokenizer sometimes inserts spaces around punctuation when
+                    # merging subword tokens. Normalise common IOC delimiters
+                    # before type matching so patterns like "192 . 168 . 1 . 1"
+                    # or "evil . com" still match.
                     value = value.replace(" - ", "-").replace("- ", "-").replace(" -", "-")
+                    value = re.sub(r"\s*\.\s*", ".", value)    # spaces around dots
+                    value = re.sub(r"\s*/\s*", "/", value)     # spaces around slashes
+                    value = re.sub(r"\s*:\s*//", "://", value) # "http ://" → "http://"
 
                     ioc_type = _LABEL_MAP[label]
 

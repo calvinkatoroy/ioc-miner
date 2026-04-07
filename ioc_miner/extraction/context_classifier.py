@@ -80,6 +80,20 @@ def _window(ioc_value: str, context: str, chars: int = 150) -> str:
     return context[start:end]
 
 
+_RE_BARE_PREFIX = re.compile(r"^[Ii]ndicator\s*:?\s*")
+
+def _has_meaningful_context(ioc_value: str, window: str, min_extra: int = 30) -> bool:
+    """
+    Return True if window contains enough context beyond the IOC value itself.
+
+    Prevents NLI from running on bare "Indicator: <value>" entries where the
+    model has no signal and defaults to benign regardless of the actual label.
+    """
+    extra = window.replace(ioc_value, "", 1)
+    extra = _RE_BARE_PREFIX.sub("", extra).strip()
+    return len(extra) >= min_extra
+
+
 # ─── Zero-shot NLI classifier ─────────────────────────────────────────────────
 
 class _NLIClassifier:
@@ -194,9 +208,10 @@ class ContextClassifier:
 
         # ── ML fallback for UNKNOWN ───────────────────────────────────────────
         if ioc.verdict == IOCVerdict.UNKNOWN and self._nli is not None:
-            verdict, conf = self._nli.classify(window)
-            ioc.verdict = verdict
-            ioc.verdict_confidence = conf
+            if _has_meaningful_context(ioc.value, window):
+                verdict, conf = self._nli.classify(window)
+                ioc.verdict = verdict
+                ioc.verdict_confidence = conf
 
         return ioc
 
@@ -221,9 +236,10 @@ class ContextClassifier:
                 ioc.verdict = IOCVerdict.UNKNOWN
                 ioc.verdict_confidence = 0.0
 
-        # ML batch pass for remaining UNKNOWNs
+        # ML batch pass for remaining UNKNOWNs — only when context is meaningful
         if self._nli is not None:
             unknowns = [i for i in iocs if i.verdict == IOCVerdict.UNKNOWN]
+            unknowns = [i for i in unknowns if _has_meaningful_context(i.value, _window(i.value, i.context))]
             if unknowns:
                 windows = [_window(i.value, i.context) for i in unknowns]
                 verdicts = self._nli.classify_batch(windows)
